@@ -1,0 +1,28 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - bodyclose
+    - errorlint
+
+  settings:
+    misspell:
+      locale: US
+
+  exclusions:
+    rules:
+      # Tests may ignore errors on cleanup paths where a failure changes
+      # nothing about the assertion being made.
+      - path: _test\.go
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt

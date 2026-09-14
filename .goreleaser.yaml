@@ -1,0 +1,73 @@
+version: 2
+
+project_name: openshift-etcd-backup-explorer
+
+before:
+  hooks:
+    # The web UI is embedded in the binary, so it has to exist before the Go
+    # build runs.
+    - npm --prefix web ci
+    - npm --prefix web run build
+    - go mod download
+
+builds:
+  - id: explorer
+    main: ./cmd/openshift-etcd-backup-explorer
+    binary: openshift-etcd-backup-explorer
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.CommitDate}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - LICENSE
+      - NOTICE
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  groups:
+    - title: Features
+      regexp: '^feat(\(.+\))?:'
+      order: 0
+    - title: Fixes
+      regexp: '^fix(\(.+\))?:'
+      order: 1
+    - title: Other
+      order: 99
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+
+release:
+  footer: |
+    ## Install
+
+    Download the archive for your platform, or build from source:
+
+    ```sh
+    go install github.com/mjovanovic0/openshift-etcd-backup-explorer/cmd/openshift-etcd-backup-explorer@{{ .Tag }}
+    ```
+
+    Note that `go install` does not build the web UI. To get the browser
+    interface, clone the repository and run `make build`.

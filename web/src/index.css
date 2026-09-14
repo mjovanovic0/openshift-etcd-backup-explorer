@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@theme {
+  /* Red Hat OpenShift console palette, so the tool looks at home next to it. */
+  --color-chrome: #151515;
+  --color-chrome-hover: #292929;
+  --color-chrome-border: #3c3f42;
+  --color-chrome-text: #d2d2d2;
+  --color-ink: #151515;
+  --color-muted: #6a6e73;
+  --color-line: #d2d2d2;
+  --color-line-soft: #ebebeb;
+  --color-surface: #ffffff;
+  --color-surface-alt: #fafafa;
+  --color-brand: #0066cc;
+  --color-brand-soft: #e7f1fa;
+  --color-ok: #3e8635;
+  --color-warn: #f0ab00;
+  --color-danger: #c9190b;
+  --color-info: #2b9af3;
+  --font-sans: "Red Hat Text", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-mono: "Red Hat Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-surface-alt);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A narrow, unobtrusive scrollbar, matching the console's panel feel. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c7c7c7 transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #c7c7c7;
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
+  background-clip: content-box;
+}

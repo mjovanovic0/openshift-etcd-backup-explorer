@@ -1,0 +1,39 @@
+# Built binaries and release output
+/openshift-etcd-backup-explorer
+/openshift-etcd-backup-explorer.exe
+/etcd-browser
+/etcd-browser.exe
+*.exe
+/dist/
+
+# Real cluster backups must never be committed: a snapshot holds every Secret
+# in the cluster. Generate a synthetic one with `make demo` instead.
+/backup/
+/demo-backup/
+*.db
+snapshot_*.db
+static_kuberesources_*.tar.gz
+# Exports and archives. A browser download started from the UI lands in the
+# working directory, and an export of a real backup carries real secrets.
+*.zip
+*.tar.gz
+
+# Web build output. The dist folder itself is kept so go:embed compiles on a
+# fresh clone, but the built assets are not committed.
+web/node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo
+internal/webui/dist/*
+!internal/webui/dist/.gitkeep
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# The UI mock this was built from, not part of the source
+/img.png
+
+# Local Claude Code configuration and skills, not part of this project
+.claude/

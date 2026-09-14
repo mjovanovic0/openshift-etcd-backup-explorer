@@ -1,0 +1,53 @@
+name: Bug report
+description: Something does not work as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not attach a real backup, or paste manifests, namespace names
+        or hostnames from a real cluster. A snapshot holds every Secret in the
+        cluster. If you can reproduce with the generated fixture
+        (`openshift-etcd-backup-explorer demo`), say so.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      placeholder: |
+        1. openshift-etcd-backup-explorer demo
+        2. openshift-etcd-backup-explorer serve -backup ./demo-backup
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `openshift-etcd-backup-explorer version`
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Where did the backup come from
+      description: >
+        For example "OpenShift 4.18 cluster-backup.sh", "etcdctl snapshot save
+        against upstream etcd 3.5". Leave blank if you used the demo fixture.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output
+      description: Any error text. Redact anything cluster specific.
+      render: text
