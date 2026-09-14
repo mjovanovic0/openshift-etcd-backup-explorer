@@ -15,8 +15,9 @@ import (
 )
 
 // exportLimit guards against a request that would walk the whole keyspace and
-// build a single enormous response.
-const exportLimit = 20000
+// build a single enormous response. It is a variable so a test can lower it
+// and exercise the boundary without needing a huge backup.
+var exportLimit = 20000
 
 // export writes every resource matching the current filters as one YAML
 // stream, one JSON list, or a zip holding a file per resource. It takes the
@@ -75,16 +76,18 @@ func (s *Server) exportYAML(w http.ResponseWriter, idx *index.Index, items []*in
 	for i, item := range items {
 		obj, err := s.renderOne(idx, item, strip)
 		if err != nil {
-			fmt.Fprintf(w, "# %s %s: %v\n", item.Kind, resourcePath(item), err)
+			_, _ = fmt.Fprintf(w, "# %s %s: %v\n", item.Kind, resourcePath(item), err)
 			continue
 		}
+		// A write fails only when the reader goes away, which nothing here
+		// can act on, so the response is written best effort.
 		if i > 0 {
-			io.WriteString(w, "---\n")
+			_, _ = io.WriteString(w, "---\n")
 		}
-		fmt.Fprintf(w, "# %s %s\n", item.Kind, resourcePath(item))
-		io.WriteString(w, obj.YAML)
+		_, _ = fmt.Fprintf(w, "# %s %s\n", item.Kind, resourcePath(item))
+		_, _ = io.WriteString(w, obj.YAML)
 		if !strings.HasSuffix(obj.YAML, "\n") {
-			io.WriteString(w, "\n")
+			_, _ = io.WriteString(w, "\n")
 		}
 	}
 }
@@ -104,7 +107,7 @@ func (s *Server) exportJSON(w http.ResponseWriter, idx *index.Index, items []*in
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	enc.Encode(map[string]any{"apiVersion": "v1", "kind": "List", "items": list})
+	_ = enc.Encode(map[string]any{"apiVersion": "v1", "kind": "List", "items": list})
 }
 
 // exportZip writes one file per resource, laid out by kind and namespace so
@@ -114,7 +117,14 @@ func (s *Server) exportZip(w http.ResponseWriter, idx *index.Index, items []*ind
 	w.Header().Set("Content-Disposition", "attachment; filename=\""+base+".zip\"")
 
 	zw := zip.NewWriter(w)
-	defer zw.Close()
+	// Closing writes the central directory, without which the archive cannot
+	// be opened, so a failure here matters even though the status line has
+	// already been sent.
+	defer func() {
+		if err := zw.Close(); err != nil {
+			s.log.Error("export could not finish the zip", "error", err)
+		}
+	}()
 
 	used := map[string]int{}
 	for _, item := range items {
@@ -144,7 +154,7 @@ func (s *Server) exportZip(w http.ResponseWriter, idx *index.Index, items []*ind
 			s.log.Error("export could not write a zip entry", "name", name, "error", err)
 			return
 		}
-		io.WriteString(f, obj.YAML)
+		_, _ = io.WriteString(f, obj.YAML)
 	}
 }
 

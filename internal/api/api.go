@@ -3,6 +3,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -350,7 +351,7 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/yaml")
 	}
 	w.Header().Set("Content-Disposition", "attachment; filename=\""+name+"\"")
-	w.Write(payload)
+	_, _ = w.Write(payload)
 }
 
 // ---- static resources ----
@@ -453,15 +454,11 @@ func writeError(w http.ResponseWriter, err error, log *slog.Logger) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 }
 
 func asStatusError(err error, out *statusError) bool {
-	if se, ok := err.(statusError); ok {
-		*out = se
-		return true
-	}
-	return false
+	return errors.As(err, out)
 }
 
 func writeJSON(w http.ResponseWriter, v any) error {

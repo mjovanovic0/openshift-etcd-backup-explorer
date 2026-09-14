@@ -146,7 +146,7 @@ func runServe(args []string, log *slog.Logger) error {
 		if err := b.Load(); err != nil {
 			return fmt.Errorf("load %s: %w", b.ID, err)
 		}
-		defer b.Close()
+		defer func() { _ = b.Close() }()
 		log.Info("indexed backup", "id", b.ID,
 			"resources", b.Index().Total(), "kinds", len(b.Index().Kinds()), "took", time.Since(start).Round(time.Millisecond))
 	}
@@ -182,7 +182,8 @@ func runServe(args []string, log *slog.Logger) error {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(shutdownCtx)
+		// Nothing useful can be done if a graceful shutdown fails.
+		_ = srv.Shutdown(shutdownCtx)
 	}()
 
 	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -212,7 +213,9 @@ func openBrowser(url string) {
 	default:
 		cmd = "xdg-open"
 	}
-	exec.Command(cmd, url).Start()
+	// Opening a browser is a convenience. If it fails the address is already
+	// printed, so the reader can open it themselves.
+	_ = exec.Command(cmd, url).Start()
 }
 
 // ---- info ----
@@ -227,7 +230,7 @@ func runInfo(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }()
 
 	idx := b.Index()
 	i := idx.Info
@@ -282,7 +285,7 @@ func runKinds(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }()
 
 	kinds := b.Index().Kinds()
 	if *byCount {
@@ -317,7 +320,7 @@ func runLs(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }()
 	idx := b.Index()
 
 	kindID, err := resolveKind(idx, *kind)
@@ -372,7 +375,7 @@ func runGet(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }()
 	idx := b.Index()
 
 	kindID, err := resolveKind(idx, *kind)

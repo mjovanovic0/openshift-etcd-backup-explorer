@@ -6,8 +6,7 @@ before:
   hooks:
     # The web UI is embedded in the binary, so it has to exist before the Go
     # build runs.
-    - npm --prefix web ci
-    - npm --prefix web run build
+    - make ui
     - go mod download
 
 builds:

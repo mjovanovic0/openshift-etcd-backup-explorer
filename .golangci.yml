@@ -15,6 +15,15 @@ linters:
     misspell:
       locale: US
 
+    errcheck:
+      exclude-functions:
+        # Printing to stdout or stderr. A failure there is not something a
+        # command line tool can act on, and Go already dies on a broken pipe.
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (*text/tabwriter.Writer).Flush
+
   exclusions:
     rules:
       # Tests may ignore errors on cleanup paths where a failure changes

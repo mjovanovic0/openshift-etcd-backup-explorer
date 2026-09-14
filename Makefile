@@ -10,9 +10,12 @@ all: build
 help:
 	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/## /  /'
 
-## ui: build the React app into the folder the Go binary embeds
+## ui: build the React app and sync it into the folder the Go binary embeds
 ui:
 	cd web && npm ci && npm run build
+	@# Replace the embedded assets without touching the committed placeholder.
+	rm -rf internal/webui/dist/assets internal/webui/dist/index.html
+	cp -R web/dist/. internal/webui/dist/
 
 ## build: build the UI and then the single binary that serves it
 build: ui

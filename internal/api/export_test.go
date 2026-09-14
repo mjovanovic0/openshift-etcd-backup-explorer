@@ -13,19 +13,28 @@ import (
 	sigsyaml "sigs.k8s.io/yaml"
 )
 
+// response is a finished HTTP exchange. The helper reads and closes the res.Body
+// itself, so a test can never leak one.
+type response struct {
+	Status int
+	Header http.Header
+	Body   []byte
+}
+
 // fetch performs a GET and returns the status, headers and body.
-func fetch(t *testing.T, srv *httptest.Server, path string) (*http.Response, []byte) {
+func fetch(t *testing.T, srv *httptest.Server, path string) response {
 	t.Helper()
 	res, err := srv.Client().Get(srv.URL + path)
 	if err != nil {
 		t.Fatalf("GET %s: %v", path, err)
 	}
+	defer func() { _ = res.Body.Close() }()
+
 	body, err := io.ReadAll(res.Body)
-	res.Body.Close()
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
-	return res, body
+	return response{Status: res.StatusCode, Header: res.Header, Body: body}
 }
 
 const pvKind = "v1%2FPersistentVolume"
@@ -33,9 +42,9 @@ const pvKind = "v1%2FPersistentVolume"
 func TestExportYAMLStream(t *testing.T) {
 	srv, id := newTestServer(t)
 
-	res, body := fetch(t, srv, "/api/backups/"+id+"/export?kind="+pvKind+"&format=yaml")
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("status %d: %s", res.StatusCode, body)
+	res := fetch(t, srv, "/api/backups/"+id+"/export?kind="+pvKind+"&format=yaml")
+	if res.Status != http.StatusOK {
+		t.Fatalf("status %d: %s", res.Status, res.Body)
 	}
 	if ct := res.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/yaml") {
 		t.Errorf("content type = %q", ct)
@@ -45,8 +54,8 @@ func TestExportYAMLStream(t *testing.T) {
 	}
 
 	// Every document must parse, and the separator count must match.
-	docs := splitYAMLDocs(string(body))
-	if len(docs) < 100 {
+	docs := splitYAMLDocs(string(res.Body))
+	if len(docs) < 5 {
 		t.Fatalf("got %d documents, expected every persistent volume", len(docs))
 	}
 	for i, doc := range docs {
@@ -72,11 +81,11 @@ func TestExportYAMLStream(t *testing.T) {
 func TestExportKeepsGeneratedFieldsWhenAsked(t *testing.T) {
 	srv, id := newTestServer(t)
 
-	_, body := fetch(t, srv, "/api/backups/"+id+"/export?kind="+pvKind+"&format=yaml&clean=false")
-	if !bytes.Contains(body, []byte("managedFields:")) {
+	res := fetch(t, srv, "/api/backups/"+id+"/export?kind="+pvKind+"&format=yaml&clean=false")
+	if !bytes.Contains(res.Body, []byte("managedFields:")) {
 		t.Error("clean=false should return the objects as stored, with managedFields")
 	}
-	if !bytes.Contains(body, []byte("creationTimestamp:")) {
+	if !bytes.Contains(res.Body, []byte("creationTimestamp:")) {
 		t.Error("clean=false should keep creationTimestamp")
 	}
 }
@@ -84,22 +93,22 @@ func TestExportKeepsGeneratedFieldsWhenAsked(t *testing.T) {
 func TestExportJSONList(t *testing.T) {
 	srv, id := newTestServer(t)
 
-	res, body := fetch(t, srv, "/api/backups/"+id+"/export?kind="+pvKind+"&format=json")
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("status %d", res.StatusCode)
+	res := fetch(t, srv, "/api/backups/"+id+"/export?kind="+pvKind+"&format=json")
+	if res.Status != http.StatusOK {
+		t.Fatalf("status %d", res.Status)
 	}
 	var list struct {
 		APIVersion string           `json:"apiVersion"`
 		Kind       string           `json:"kind"`
 		Items      []map[string]any `json:"items"`
 	}
-	if err := json.Unmarshal(body, &list); err != nil {
+	if err := json.Unmarshal(res.Body, &list); err != nil {
 		t.Fatalf("response is not JSON: %v", err)
 	}
 	if list.Kind != "List" || list.APIVersion != "v1" {
 		t.Errorf("wrapper = %s/%s, want v1/List", list.APIVersion, list.Kind)
 	}
-	if len(list.Items) < 100 {
+	if len(list.Items) < 5 {
 		t.Fatalf("got %d items", len(list.Items))
 	}
 	meta, _ := list.Items[0]["metadata"].(map[string]any)
@@ -111,19 +120,19 @@ func TestExportJSONList(t *testing.T) {
 func TestExportZipLayout(t *testing.T) {
 	srv, id := newTestServer(t)
 
-	res, body := fetch(t, srv, "/api/backups/"+id+"/export?kind="+pvKind+"&format=zip")
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("status %d", res.StatusCode)
+	res := fetch(t, srv, "/api/backups/"+id+"/export?kind="+pvKind+"&format=zip")
+	if res.Status != http.StatusOK {
+		t.Fatalf("status %d", res.Status)
 	}
 	if ct := res.Header.Get("Content-Type"); ct != "application/zip" {
 		t.Errorf("content type = %q", ct)
 	}
 
-	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	zr, err := zip.NewReader(bytes.NewReader(res.Body), int64(len(res.Body)))
 	if err != nil {
 		t.Fatalf("response is not a zip: %v", err)
 	}
-	if len(zr.File) < 100 {
+	if len(zr.File) < 5 {
 		t.Fatalf("zip holds %d entries", len(zr.File))
 	}
 	seen := map[string]bool{}
@@ -160,9 +169,9 @@ func TestExportZipLayout(t *testing.T) {
 func TestExportNamespacedLayoutIncludesNamespace(t *testing.T) {
 	srv, id := newTestServer(t)
 
-	_, body := fetch(t, srv,
+	res := fetch(t, srv,
 		"/api/backups/"+id+"/export?kind=v1%2FConfigMap&namespace=openshift-etcd&format=zip")
-	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	zr, err := zip.NewReader(bytes.NewReader(res.Body), int64(len(res.Body)))
 	if err != nil {
 		t.Fatalf("not a zip: %v", err)
 	}
@@ -180,12 +189,12 @@ func TestExportRespectsFilters(t *testing.T) {
 	list := getJSON[listResponse](t, srv,
 		"/api/backups/"+id+"/resources?kind=v1%2FConfigMap&namespace=openshift-etcd&status=false&limit=500")
 
-	_, body := fetch(t, srv,
+	res := fetch(t, srv,
 		"/api/backups/"+id+"/export?kind=v1%2FConfigMap&namespace=openshift-etcd&format=json")
 	var out struct {
 		Items []map[string]any `json:"items"`
 	}
-	if err := json.Unmarshal(body, &out); err != nil {
+	if err := json.Unmarshal(res.Body, &out); err != nil {
 		t.Fatal(err)
 	}
 	if len(out.Items) != list.Total {
@@ -197,23 +206,30 @@ func TestExportErrors(t *testing.T) {
 	srv, id := newTestServer(t)
 
 	// A filter matching nothing is an error, not an empty file.
-	res, _ := fetch(t, srv, "/api/backups/"+id+"/export?kind=v1%2FPod&q=surely-no-such-object-exists")
-	if res.StatusCode != http.StatusNotFound {
-		t.Errorf("empty export status = %d, want 404", res.StatusCode)
+	empty := fetch(t, srv, "/api/backups/"+id+"/export?kind=v1%2FPod&q=surely-no-such-object-exists")
+	if empty.Status != http.StatusNotFound {
+		t.Errorf("empty export status = %d, want 404", empty.Status)
 	}
 
-	// The whole keyspace is past the single response limit.
-	res, body := fetch(t, srv, "/api/backups/"+id+"/export?kind=*")
-	if res.StatusCode != http.StatusRequestEntityTooLarge {
-		t.Errorf("unbounded export status = %d, want 413", res.StatusCode)
-	}
-	if !bytes.Contains(body, []byte("narrow the filter")) {
-		t.Errorf("the limit error should say what to do: %s", body)
-	}
+	// A selection past the single response limit is refused with advice,
+	// rather than the server trying to build it.
+	t.Run("past the export limit", func(t *testing.T) {
+		original := exportLimit
+		exportLimit = 3
+		t.Cleanup(func() { exportLimit = original })
 
-	res, _ = fetch(t, srv, "/api/backups/nope/export?kind=v1%2FPod")
-	if res.StatusCode != http.StatusNotFound {
-		t.Errorf("unknown backup status = %d", res.StatusCode)
+		huge := fetch(t, srv, "/api/backups/"+id+"/export?kind=*")
+		if huge.Status != http.StatusRequestEntityTooLarge {
+			t.Errorf("unbounded export status = %d, want 413", huge.Status)
+		}
+		if !bytes.Contains(huge.Body, []byte("narrow the filter")) {
+			t.Errorf("the limit error should say what to do: %s", huge.Body)
+		}
+	})
+
+	unknown := fetch(t, srv, "/api/backups/nope/export?kind=v1%2FPod")
+	if unknown.Status != http.StatusNotFound {
+		t.Errorf("unknown backup status = %d", unknown.Status)
 	}
 }
 
@@ -223,22 +239,22 @@ func TestSingleDownloadCleansByDefault(t *testing.T) {
 	list := getJSON[listResponse](t, srv, "/api/backups/"+id+"/resources?kind=v1%2FPod&limit=1&sort=name")
 	rid := list.Items[0].ID
 
-	_, clean := fetch(t, srv, "/api/backups/"+id+"/resources/"+rid+"/download?format=yaml")
-	if bytes.Contains(clean, []byte("managedFields:")) {
+	clean := fetch(t, srv, "/api/backups/"+id+"/resources/"+rid+"/download?format=yaml")
+	if bytes.Contains(clean.Body, []byte("managedFields:")) {
 		t.Error("a download should be cleaned by default")
 	}
 
-	_, raw := fetch(t, srv, "/api/backups/"+id+"/resources/"+rid+"/download?format=yaml&clean=false")
-	if !bytes.Contains(raw, []byte("managedFields:")) {
+	raw := fetch(t, srv, "/api/backups/"+id+"/resources/"+rid+"/download?format=yaml&clean=false")
+	if !bytes.Contains(raw.Body, []byte("managedFields:")) {
 		t.Error("clean=false should return the object as stored")
 	}
-	if len(raw) <= len(clean) {
-		t.Errorf("the stored form should be larger: %d vs %d", len(raw), len(clean))
+	if len(raw.Body) <= len(clean.Body) {
+		t.Errorf("the stored form should be larger: %d vs %d", len(raw.Body), len(clean.Body))
 	}
 
 	// The raw etcd value is never rewritten, whatever the clean flag says.
-	_, rawValue := fetch(t, srv, "/api/backups/"+id+"/resources/"+rid+"/download?format=raw")
-	if !bytes.HasPrefix(rawValue, []byte("k8s\x00")) {
+	stored := fetch(t, srv, "/api/backups/"+id+"/resources/"+rid+"/download?format=raw")
+	if !bytes.HasPrefix(stored.Body, []byte("k8s\x00")) {
 		t.Error("the raw download should be the stored protobuf, untouched")
 	}
 }

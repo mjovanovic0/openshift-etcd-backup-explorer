@@ -37,13 +37,14 @@ func Open(path string) (*Archive, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	// Read only, so a close failure cannot lose anything.
+	defer func() { _ = f.Close() }()
 
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 
 	a := &Archive{Path: path, index: map[string]int{}}
 	tr := tar.NewReader(gz)

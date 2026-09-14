@@ -7,7 +7,7 @@ import (
 )
 
 // Status is a short health summary for the resource list, plus a tone the UI
-// turns into a coloured dot.
+// turns into a colored dot.
 type Status struct {
 	Text string `json:"text"`
 	Tone string `json:"tone"` // ok, warn, error, info, neutral

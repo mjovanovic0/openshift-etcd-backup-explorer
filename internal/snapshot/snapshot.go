@@ -74,7 +74,7 @@ func Open(path string) (*Snapshot, error) {
 		}
 		return nil
 	}); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 	return &Snapshot{Path: path, Size: st.Size(), db: db}, nil

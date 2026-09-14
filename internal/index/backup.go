@@ -115,7 +115,7 @@ func (b *Backup) Load() error {
 	}
 	idx, err := Build(snap)
 	if err != nil {
-		snap.Close()
+		_ = snap.Close()
 		return err
 	}
 	b.snap, b.idx = snap, idx

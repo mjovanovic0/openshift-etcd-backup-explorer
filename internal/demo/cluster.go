@@ -356,6 +356,10 @@ func (b *builder) workload(seed int, ns, app string, replicas, port int32) {
 	svc.Labels = labels
 	b.addProto(fmt.Sprintf("%s/services/specs/%s/%s", kubePrefix, ns, app), svc, "v1", "Service")
 
+	// Endpoints is deprecated upstream in favor of EndpointSlice, but a real
+	// cluster snapshot is still full of them, so the fixture carries them to
+	// stay representative of what this tool actually reads.
+	//nolint:staticcheck // SA1019: deliberately exercising the stored type
 	ep := &corev1.Endpoints{
 		ObjectMeta: meta(app, ns, age),
 		Subsets: []corev1.EndpointSubset{{

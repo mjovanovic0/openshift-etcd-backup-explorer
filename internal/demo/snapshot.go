@@ -46,7 +46,7 @@ type record struct {
 	deleted bool
 }
 
-func writeSnapshot(path string) error {
+func writeSnapshot(path string) (err error) {
 	records, err := buildCluster()
 	if err != nil {
 		return err
@@ -60,7 +60,13 @@ func writeSnapshot(path string) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	// bolt flushes on Close, so a failure there means the fixture on disk is
+	// not what was written.
+	defer func() {
+		if cerr := db.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	return db.Update(func(tx *bolt.Tx) error {
 		// etcd creates these buckets whether or not they hold anything.
@@ -160,14 +166,20 @@ func marshalKeyValue(key string, value []byte, createRev, modRev int64) []byte {
 	return out
 }
 
+// Protobuf wire types, the low three bits of a field tag.
+const (
+	wireVarint = 0
+	wireBytes  = 2
+)
+
 func appendBytesField(dst []byte, field uint64, value []byte) []byte {
-	dst = appendVarint(dst, field<<3|2)
+	dst = appendVarint(dst, field<<3|wireBytes)
 	dst = appendVarint(dst, uint64(len(value)))
 	return append(dst, value...)
 }
 
 func appendVarintField(dst []byte, field, value uint64) []byte {
-	dst = appendVarint(dst, field<<3|0)
+	dst = appendVarint(dst, field<<3|wireVarint)
 	return appendVarint(dst, value)
 }
 

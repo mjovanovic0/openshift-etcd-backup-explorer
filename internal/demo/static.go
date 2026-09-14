@@ -3,6 +3,7 @@ package demo
 import (
 	"archive/tar"
 	"compress/gzip"
+	"fmt"
 	"os"
 
 	apitypes "k8s.io/apimachinery/pkg/types"
@@ -64,17 +65,22 @@ ZGVtbyBjZXJ0aWZpY2F0ZSwgbm90IGEgcmVhbCBvbmU=
 `
 
 // writeStaticArchive produces the static_kuberesources tarball.
-func writeStaticArchive(path string) error {
+func writeStaticArchive(path string) (err error) {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	// The three writers are layered, so each has to be closed in order and
+	// its error checked. Closing them in a defer and dropping the error would
+	// report success on a truncated archive.
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	gz := gzip.NewWriter(f)
-	defer gz.Close()
 	tw := tar.NewWriter(gz)
-	defer tw.Close()
 
 	// A stable order keeps the fixture reproducible.
 	for _, name := range sortedKeys(staticFiles) {
@@ -91,6 +97,13 @@ func writeStaticArchive(path string) error {
 		if _, err := tw.Write([]byte(body)); err != nil {
 			return err
 		}
+	}
+
+	if err := tw.Close(); err != nil {
+		return fmt.Errorf("finish the tar stream: %w", err)
+	}
+	if err := gz.Close(); err != nil {
+		return fmt.Errorf("finish the gzip stream: %w", err)
 	}
 	return nil
 }

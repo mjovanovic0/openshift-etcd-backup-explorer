@@ -6,21 +6,15 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/mjovanovic0/openshift-etcd-backup-explorer/internal/index"
 )
 
-const backupDir = "../../backup"
-
 func newTestServer(t *testing.T) (*httptest.Server, string) {
 	t.Helper()
-	if _, err := os.Stat(backupDir); err != nil {
-		t.Skip("no sample backup in ./backup, skipping")
-	}
-	backups, err := index.Discover(backupDir)
+	backups, err := index.Discover(fixtureDir(t))
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
 	}

@@ -40,7 +40,7 @@ func runExport(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer b.Close()
+	defer func() { _ = b.Close() }()
 	idx := b.Index()
 
 	kindID, err := resolveKind(idx, *kind)
